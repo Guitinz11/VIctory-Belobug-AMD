@@ -32,10 +32,19 @@ pub fn run(paths: Vec<PathBuf>, strict: bool, list_missing: bool) -> Result<()> 
     let mut missing: BTreeMap<(String, String), BTreeSet<PathBuf>> = BTreeMap::new();
 
     for root in &paths {
-        for entry in walkdir::WalkDir::new(root)
-            .into_iter()
-            .filter_map(Result::ok)
-        {
+        for entry in walkdir::WalkDir::new(root) {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(error) => {
+                    // Don't silently report a partial census as complete when
+                    // a directory cannot be read or traversed.
+                    let path = error
+                        .path()
+                        .map_or_else(|| root.clone(), Path::to_path_buf);
+                    failed.push((path, error.to_string()));
+                    continue;
+                }
+            };
             let path = entry.path();
             if !entry.file_type().is_file() || !looks_like_pe(path) {
                 continue;
